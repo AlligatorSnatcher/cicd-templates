@@ -1,0 +1,88 @@
+# Reusable RESTORE — rsync a chosen backup back to root@<host>:/var/<folder>/.
+#
+# Generic building block; the counterpart to backup.yml. Triggered via a thin
+# workflow_dispatch caller in the app repo (reusable workflows can't be
+# dispatched directly), which forwards the inputs below.
+#
+# Restores CODE ONLY: appsettings*.json are excluded so a rollback keeps the
+# server's current config. No --delete, so files the server gained since the
+# backup are left in place.
+#
+# WRITES TO THE LIVE SERVER — gated by a typed confirmation (`confirm` must equal
+# `folder`). Reads backups from $BACKUP_DEST (inherited from the runner env).
+#
+# Pick the backup via `backup`: "latest" or a specific "<stamp>-<run_id>" dir
+# name (the step prints what's on disk).
+#
+name: Restore (rsync from backup)
+
+on:
+  workflow_call:
+    inputs:
+      host:
+        description: "Target server to restore to (IP or hostname)"
+        type: string
+        required: true
+      folder:
+        description: "App folder under /var to restore"
+        type: string
+        required: true
+      backup:
+        description: 'Which backup to restore ("latest" or a <stamp>-<run_id> dir)'
+        type: string
+        required: true
+      confirm:
+        description: "Must equal `folder` to proceed (typed-confirmation gate)"
+        type: string
+        required: true
+      runner_label:
+        description: "Extra self-hosted runner label to target (must match the env)"
+        type: string
+        required: true
+
+concurrency:
+  group: restore-${{ inputs.folder }}
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    name: restore ${{ inputs.folder }} <- ${{ inputs.backup }}
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_label }}
+    steps:
+      - name: Restore from backup
+        env:
+          HOST: ${{ inputs.host }}
+          FOLDER: ${{ inputs.folder }}
+          BACKUP: ${{ inputs.backup }}
+          CONFIRM: ${{ inputs.confirm }}
+          # BACKUP_DEST inherited from the runner container's env, not set here.
+        run: |
+          set -euo pipefail
+          ROOT="${BACKUP_DEST:?Set repo variable BACKUP_DEST to the mounted host path (e.g. /codebkp)}"
+          DEST_ROOT="$ROOT/$FOLDER"
+
+          echo "Available backups under $DEST_ROOT:"
+          ls -1dt "$DEST_ROOT"/*/ 2>/dev/null || { echo "  (none found)"; exit 1; }
+
+          # Safety gate: must type the folder name exactly.
+          if [ "$CONFIRM" != "$FOLDER" ]; then
+            echo "Confirmation mismatch: type the folder name '$FOLDER' in the confirm box to proceed."
+            exit 1
+          fi
+
+          if [ "$BACKUP" = "latest" ]; then
+            SRC="$(ls -1dt "$DEST_ROOT"/*/ 2>/dev/null | head -n1)"
+          else
+            SRC="$DEST_ROOT/$BACKUP/"
+          fi
+          if [ -z "${SRC:-}" ] || [ ! -d "$SRC" ]; then
+            echo "Backup not found: '$BACKUP'"
+            exit 1
+          fi
+
+          echo "Restoring $SRC -> root@$HOST:/var/$FOLDER/"
+          # Exclude config so a rollback keeps the server's CURRENT appsettings.
+          rsync -ptvrz --exclude 'appsettings*.json' "$SRC" "root@$HOST:/var/$FOLDER/"
+          echo "Restore complete from: $SRC"
