@@ -13,8 +13,8 @@
 #   * artifact (default): upload-artifact, downloaded by deploy. Portable, but
 #     round-trips through GitHub artifact storage (slow on a constrained link).
 #   * stage (`stage: true`): rsync the publish into a per-run dir on a host volume
-#     mounted into the runner ($PUBLISH_DEST/<artifact>/<run_id>/); deploy reads
-#     it from there. Stays on the LAN — far faster when the artifact link is the
+#     mounted into the runner ($PUBLISH_DEST/<repo>/<artifact>/<run_id>/); deploy
+#     reads it from there. Stays on the LAN — far faster when the artifact link is the
 #     bottleneck. Requires the SAME $PUBLISH_DEST visible to build AND deploy
 #     runners (single runner host, or a shared mount), like BACKUP_DEST.
 #
@@ -91,7 +91,9 @@ jobs:
         run: |
           set -euo pipefail
           ROOT="${PUBLISH_DEST:?Set PUBLISH_DEST (mounted host path) on the runner to use stage mode}"
-          BASE="$ROOT/$ARTIFACT"
+          # Namespace by repo so projects sharing a runner host (and the same
+          # artifact name) never collide or share each other's prune pool.
+          BASE="$ROOT/$GITHUB_REPOSITORY/$ARTIFACT"
           OUT="$BASE/$GITHUB_RUN_ID"
           # Newest existing per-run dir (computed BEFORE creating OUT) — unchanged
           # files are hardlinked from it via --link-dest, so a fresh per-run dir

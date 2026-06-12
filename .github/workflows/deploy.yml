@@ -20,8 +20,9 @@
 # host(s) a delay so each is touched only after the previous one is back up.
 #
 # TRANSPORT (`stage`): must match the build job. Default reads the GitHub
-# artifact; `stage: true` reads the publish from $PUBLISH_DEST/<artifact>/<run_id>/
-# on the mounted host volume (no artifact download) — see build.yml.
+# artifact; `stage: true` reads the publish from
+# $PUBLISH_DEST/<repo>/<artifact>/<run_id>/ on the mounted host volume (no
+# artifact download) — see build.yml.
 #
 name: Deploy (rsync artifact)
 
@@ -98,7 +99,8 @@ jobs:
           : "${HOST:?host input is empty — set the target server repo var before running}"
           if [ "$STAGE" = "true" ]; then
             ROOT="${PUBLISH_DEST:?Set PUBLISH_DEST (mounted host path) on the runner to use stage mode}"
-            SRC="$ROOT/$ARTIFACT/$GITHUB_RUN_ID/"
+            # Must match build's path (namespaced by repo).
+            SRC="$ROOT/$GITHUB_REPOSITORY/$ARTIFACT/$GITHUB_RUN_ID/"
             [ -d "$SRC" ] || { echo "::error::Staged build not found: $SRC (did build run with stage: true?)"; exit 1; }
           else
             SRC="$GITHUB_WORKSPACE/publish/"

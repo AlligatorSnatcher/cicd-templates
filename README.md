@@ -24,7 +24,7 @@
 - `backup.yml` 需要 runner 上有 `BACKUP_DEST`(掛進容器的 host 路徑)—— 由 runner 的環境變數繼承,不是 input。
 - runner 能 SSH 到 `root@<host>`。
 - **stage 傳輸模式(選用)**:build/deploy 設 `stage: true` 時,改用掛載的 host volume `PUBLISH_DEST`
-  交接 publish(`$PUBLISH_DEST/<artifact>/<run_id>/`),不走 GitHub artifact storage —— 當 artifact
+  交接 publish(`$PUBLISH_DEST/<repo>/<artifact>/<run_id>/`,依 repo 命名空間隔離),不走 GitHub artifact storage —— 當 artifact
   連線是瓶頸時快很多。前提:build 與 deploy 的 runner 看得到**同一個** `PUBLISH_DEST`(單台 runner
   或共用掛載),跟 `BACKUP_DEST` 同樣假設。
 
