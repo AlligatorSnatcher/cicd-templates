@@ -1,0 +1,79 @@
+# Reusable BACKUP — snapshot the live /var/<folder>/ before a deploy.
+#
+# Generic building block. The runner rsyncs the FULL /var/<folder>/ from the
+# source server into a per-run backup directory on a host volume, then prunes to
+# the most recent few. host/folder are required inputs — no values are hardcoded.
+#
+# WHY a per-run directory: every run writes to $BACKUP_DEST/<folder>/<stamp>-<run_id>/.
+# github.run_id is globally unique, so two runs can never overwrite each other;
+# this also keeps several restore points. `flock` only guards the prune step.
+#
+# DOCKER VOLUME (required): backups must land on a host path mounted into the
+# runner container, or they vanish when the runner is recycled. Start the runner
+# with e.g. `-v /host/path:/codebkp` and set the repo variable BACKUP_DEST to
+# that in-container path (e.g. /codebkp). BACKUP_DEST is inherited from the
+# runner container's env, NOT set here.
+#
+name: Backup (/var/<folder>)
+
+on:
+  workflow_call:
+    inputs:
+      host:
+        description: "Source server to back up from (IP or hostname)"
+        type: string
+        required: true
+      folder:
+        description: "App folder under /var to back up"
+        type: string
+        required: true
+      runner_label:
+        description: "Extra self-hosted runner label to target (e.g. dev / prod)"
+        type: string
+        required: true
+      keep:
+        description: "How many recent backups to keep"
+        type: string
+        required: false
+        default: "5"
+
+# Serialise same-folder runs so we don't hammer the source with two pulls.
+concurrency:
+  group: backup-${{ inputs.folder }}
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: backup /var/${{ inputs.folder }}
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_label }}
+    steps:
+      - name: Backup to a per-run directory
+        env:
+          HOST: ${{ inputs.host }}
+          FOLDER: ${{ inputs.folder }}
+          KEEP: ${{ inputs.keep }}
+          # BACKUP_DEST inherited from the runner container's env (see docs).
+        run: |
+          set -euo pipefail
+          ROOT="${BACKUP_DEST:?Set repo variable BACKUP_DEST to the mounted host path (e.g. /codebkp)}"
+          DEST_ROOT="$ROOT/$FOLDER"
+          STAMP="$(date +%Y%m%d%H%M%S)"
+          RUN_DIR="$DEST_ROOT/${STAMP}"-${GITHUB_RUN_ID}
+          mkdir -p "$RUN_DIR"
+
+          echo "Backing up root@$HOST:/var/$FOLDER/ -> $RUN_DIR"
+          # Trailing slash on source copies the folder contents (incl. dotfiles).
+          rsync -ptvrz "root@$HOST:/var/$FOLDER/" "$RUN_DIR/"
+          echo "Backup complete: $RUN_DIR"
+
+          # Prune to the newest $KEEP backups. Locked so two jobs can't both
+          # prune (and possibly delete the same dir) at once.
+          exec 9>"$DEST_ROOT/.prune.lock"
+          flock 9
+          ls -1dt "$DEST_ROOT"/*/ 2>/dev/null | tail -n +"$((KEEP + 1))" | while read -r old; do
+            echo "Pruning old backup: $old"
+            rm -rf "$old"
+          done
+          echo "Kept newest $KEEP backups under $DEST_ROOT"

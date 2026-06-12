@@ -1,0 +1,63 @@
+# Reusable DEPLOY — rsync a built artifact onto root@<host>:/var/<folder>/.
+#
+# Generic building block. The artifact must already have been uploaded by the
+# build workflow earlier in the SAME run (artifacts are shared across reusable
+# jobs within one run). host/folder are required inputs — nothing is hardcoded.
+#
+# --exclude appsettings.json + no --delete: overwrites/adds files but keeps the
+# server's own config and never removes files the server has gained.
+#
+name: Deploy (rsync artifact)
+
+on:
+  workflow_call:
+    inputs:
+      host:
+        description: "Target server to deploy to (IP or hostname)"
+        type: string
+        required: true
+      folder:
+        description: "App folder under /var to deploy into"
+        type: string
+        required: true
+      runner_label:
+        description: "Extra self-hosted runner label to target (e.g. dev / prod)"
+        type: string
+        required: true
+      artifact:
+        description: "Artifact name to download"
+        type: string
+        required: false
+        default: "publish"
+      environment:
+        description: "GitHub environment (for approval gating / scoped vars)"
+        type: string
+        required: false
+        default: ""
+
+jobs:
+  deploy:
+    name: deploy -> ${{ inputs.host }}
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_label }}
+    # Optional approval / scoping hook. Pass an environment with required
+    # reviewers to gate here; pass "" for no gate.
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact }}
+          path: publish
+
+      - name: Deploy — rsync to target server
+        env:
+          HOST: ${{ inputs.host }}
+          FOLDER: ${{ inputs.folder }}
+        run: |
+          set -euo pipefail
+          echo "Deploying $GITHUB_WORKSPACE/publish/ -> root@$HOST:/var/$FOLDER/"
+          rsync -ptvrz --exclude appsettings.json \
+            "$GITHUB_WORKSPACE/publish/" "root@$HOST:/var/$FOLDER/"
+          echo "Deploy complete."

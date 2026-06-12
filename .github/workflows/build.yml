@@ -1,0 +1,66 @@
+# Reusable BUILD — dotnet publish a project -> upload artifact.
+#
+# Generic building block. Call it from an app repo via `uses:`. All project- and
+# environment-specific values come in as inputs; nothing is hardcoded here.
+#
+# ASSUMES: the target runner has the .NET SDK available (e.g. the org's
+# dotnet-runner image). Jobs run directly on the runner (no `container:`).
+#
+# SECRETS: the artifact EXCLUDES appsettings*.json so config never leaves the
+# network into GitHub artifact storage; the server keeps its own config.
+#
+name: Build (dotnet publish)
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: "Path to the .csproj to publish (e.g. src/App/App.csproj)"
+        type: string
+        required: true
+      runner_label:
+        description: "Extra self-hosted runner label to target (e.g. dev / prod)"
+        type: string
+        required: true
+      config:
+        description: "Build configuration (Debug / Release)"
+        type: string
+        required: false
+        default: "Debug"
+      artifact:
+        description: "Artifact name to upload"
+        type: string
+        required: false
+        default: "publish"
+
+jobs:
+  build:
+    name: build (${{ inputs.config }})
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_label }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build — dotnet publish
+        env:
+          PROJECT: ${{ inputs.project }}
+          CONFIG: ${{ inputs.config }}
+        run: |
+          set -euo pipefail
+          dotnet --info | head -n 5 || true
+          rm -rf "$GITHUB_WORKSPACE/publish"
+          dotnet publish "$PROJECT" -c "$CONFIG" -o "$GITHUB_WORKSPACE/publish"
+          echo "Published $CONFIG -> $GITHUB_WORKSPACE/publish"
+
+      - name: Upload build artifact (excludes appsettings*.json)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact }}
+          # Exclude config so secrets never reach GitHub artifact storage.
+          path: |
+            publish
+            !publish/appsettings*.json
+          retention-days: 3
+          if-no-files-found: error
