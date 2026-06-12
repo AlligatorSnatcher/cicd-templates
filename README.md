@@ -13,8 +13,9 @@
 | [`build.yml`](.github/workflows/build.yml) | `dotnet publish` 一個專案,上傳成 artifact(排除 `appsettings*.json`) |
 | [`test.yml`](.github/workflows/test.yml) | `dotnet test` 一個測試專案或 solution |
 | [`backup.yml`](.github/workflows/backup.yml) | 從伺服器 rsync `/var/<folder>/` 到 host volume 的每次獨立備份目錄,只保留最新 N 份 |
-| [`deploy.yml`](.github/workflows/deploy.yml) | rsync artifact 到 `root@<host>:/var/<folder>/`(保留伺服器的 `appsettings.json`)。**無 gate** —— 給 dev 這種不需核准的 |
-| [`deploy-approve.yml`](.github/workflows/deploy-approve.yml) | 同 `deploy.yml`,但有 **actor gate**(`allowed_actors` + 選填 `allowed_ref`)—— 給 prod 這種受保護的 |
+| [`deploy.yml`](.github/workflows/deploy.yml) | rsync artifact 到 `root@<host>:/var/<folder>/`(保留伺服器的 `appsettings.json`)。**無 gate** |
+| [`authorize.yml`](.github/workflows/authorize.yml) | **前置守門**:檢查 actor(`allowed_actors`)+ 選填 ref(`allowed_ref`)。擺在最前面,讓未授權/錯分支的 run 連 build/backup 都不跑 —— 給 prod 這種受保護的 |
+| [`restore.yml`](.github/workflows/restore.yml) | 從備份 rsync 回 `root@<host>:/var/<folder>/`(手動回滾;typed-confirm + 選填 actor gate;排除 `appsettings*.json`) |
 
 ## 前提假設
 
@@ -117,21 +118,31 @@ jobs:
 | `runner_label` | ✅ | — | runner label |
 | `artifact` | ➖ | `publish` | 要下載的 artifact 名稱 |
 
-### deploy-approve.yml(actor gate)
+### authorize.yml(前置守門)
 | Input | 必填 | 預設 | 說明 |
 |---|---|---|---|
-| `host` | ✅ | — | 目標伺服器(IP / hostname) |
-| `folder` | ✅ | — | `/var` 底下的 app 資料夾 |
+| `allowed_actors` | ✅ | — | 允許執行的 GitHub 帳號(空白分隔)。**任何方案都可用** |
 | `runner_label` | ✅ | — | runner label |
-| `allowed_actors` | ✅ | — | 允許部署的 GitHub 帳號(空白分隔)。**任何方案都可用** |
 | `allowed_ref` | ➖ | `""` | 限定分支,例如 `refs/heads/release` |
-| `artifact` | ➖ | `publish` | 要下載的 artifact 名稱 |
 
+> **用法**:擺在 caller 的**第一個 job**,build/backup/deploy 全部 `needs: authorize`,搭配 plain
+> `deploy.yml`。未授權/錯分支的 run 連 build、backup 都不會跑。
+>
 > **軟控制**:有 write 權限的人能改 workflow 繞過 actor gate。GitHub environment Required
 > reviewers 更強,但 private repo 需付費方案。
->
-> **Gate 時機**:gate 在 deploy job 開始時才檢查 —— 若在 build/backup 之後才呼叫,那兩個會先跑。
-> 要讓未授權者連 build 都不准,就在 caller 放一個 authorize job 跑在最前面。
+
+### restore.yml(手動回滾)
+| Input | 必填 | 預設 | 說明 |
+|---|---|---|---|
+| `host` | ✅ | — | 要還原到的目標伺服器(IP / hostname) |
+| `folder` | ✅ | — | `/var` 底下的 app 資料夾 |
+| `backup` | ✅ | — | 要還原哪一份(`latest` 或某個 `<stamp>-<run_id>` 目錄) |
+| `confirm` | ✅ | — | 必須等於 `folder`(打字確認 gate) |
+| `runner_label` | ✅ | — | runner label |
+| `allowed_actors` | ➖ | `""` | 選填 actor allow-list;空白 = 不檢查(例如 prod 才限定) |
+
+> 由 app repo 一個 `workflow_dispatch` 薄 caller 觸發(reusable workflow 不能直接被 dispatch)。
+> 從 runner 的 `BACKUP_DEST` 讀備份,排除 `appsettings*.json`(回滾保留伺服器當前 config)。
 
 ## 改流程怎麼做
 

@@ -1,11 +1,11 @@
 # Reusable AUTHORIZE — front gate for protected pipelines (e.g. prod).
 #
 # Put this FIRST in the caller and make build/backup/deploy `needs: authorize`,
-# so an unauthorized / wrong-branch / misconfigured run is stopped BEFORE it
-# builds or snapshots anything. (deploy-approve.yml gates at deploy time, i.e.
-# AFTER build+backup — use this when you want the gate up front instead.)
+# so an unauthorized / wrong-branch run is stopped BEFORE it builds or snapshots
+# anything. Pair it with the plain deploy.yml (the gate is up front, so the
+# deploy step itself doesn't need to re-check).
 #
-# Checks three things at the very start of the run:
+# Checks at the very start of the run:
 #   * allowed_ref     — optional: run must come from this ref (e.g. release).
 #   * allowed_actors  — REQUIRED actor allow-list (space-separated logins).
 #                       Works on ANY plan. Soft control — editable by anyone with

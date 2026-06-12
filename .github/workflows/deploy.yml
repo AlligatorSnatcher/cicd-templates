@@ -1,7 +1,8 @@
 # Reusable DEPLOY — rsync a built artifact onto root@<host>:/var/<folder>/.
 #
-# Generic building block, NO approval gate — for non-gated environments (e.g.
-# dev). For a gated deploy (e.g. prod), use deploy-approve.yml instead.
+# Generic building block, NO approval gate. For a gated pipeline (e.g. prod),
+# run authorize.yml as the first job and make build/backup/deploy `needs` it, so
+# an unauthorized run is stopped before it builds or snapshots anything.
 #
 # The artifact must already have been uploaded by the build workflow earlier in
 # the SAME run (artifacts are shared across reusable jobs within one run).
