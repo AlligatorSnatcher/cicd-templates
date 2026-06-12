@@ -53,7 +53,7 @@ Pin 到 tag(例如 `@v1`),**不要**用 `@main`:
 ```yaml
 jobs:
   build:
-    uses: AlligatorSnatcher/cicd-templates/.github/workflows/build.yml@v1
+    uses: COSCOMMS/cicd-templates/.github/workflows/build.yml@v1
     with:
       project: src/MyApp/MyApp.csproj
       runner_label: dev
@@ -62,7 +62,7 @@ jobs:
 
   backup:
     needs: build
-    uses: AlligatorSnatcher/cicd-templates/.github/workflows/backup.yml@v1
+    uses: COSCOMMS/cicd-templates/.github/workflows/backup.yml@v1
     with:
       host: ${{ vars.DEV_HOST }}        # 真實 host 放在 CALLER 的 repo variables
       folder: ${{ vars.DEV_FOLDER }}
@@ -70,7 +70,7 @@ jobs:
 
   deploy:
     needs: backup
-    uses: AlligatorSnatcher/cicd-templates/.github/workflows/deploy.yml@v1
+    uses: COSCOMMS/cicd-templates/.github/workflows/deploy.yml@v1
     with:
       host: ${{ vars.DEV_HOST }}
       folder: ${{ vars.DEV_FOLDER }}
