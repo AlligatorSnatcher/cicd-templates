@@ -60,7 +60,9 @@ jobs:
         # Optional: restrict who may restore (e.g. prod). Empty = no gate (dev).
         if: inputs.allowed_actors != ''
         env:
-          ACTOR: ${{ github.actor }}
+          # triggering_actor = who initiated THIS run/re-run (re-run safe);
+          # github.actor would stay as the original triggerer on a re-run.
+          ACTOR: ${{ github.triggering_actor }}
           ALLOWED_ACTORS: ${{ inputs.allowed_actors }}
         run: |
           set -euo pipefail

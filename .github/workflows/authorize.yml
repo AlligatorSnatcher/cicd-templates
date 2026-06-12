@@ -10,6 +10,11 @@
 #   * allowed_actors  — REQUIRED actor allow-list (space-separated logins).
 #                       Works on ANY plan. Soft control — editable by anyone with
 #                       write access — adequate for an internal team.
+#                       Checks github.triggering_actor (the person who actually
+#                       triggered THIS run/re-run), NOT github.actor — the latter
+#                       stays as the ORIGINAL triggerer on a re-run, so an
+#                       unauthorized user re-running an authorized run would
+#                       otherwise inherit that actor and pass.
 #
 # This gate is AUTHORIZATION only (who / which ref). Config validation — e.g.
 # "is PROD_HOST set?" — belongs to the building blocks that consume it: backup /
@@ -43,7 +48,8 @@ jobs:
     steps:
       - name: Authorize (ref + actor)
         env:
-          ACTOR: ${{ github.actor }}
+          # triggering_actor = who initiated THIS run/re-run (re-run safe).
+          ACTOR: ${{ github.triggering_actor }}
           REF: ${{ github.ref }}
           ALLOWED_ACTORS: ${{ inputs.allowed_actors }}
           ALLOWED_REF: ${{ inputs.allowed_ref }}
