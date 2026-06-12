@@ -32,7 +32,7 @@ on:
         type: string
         required: true
       backup:
-        description: 'Which backup to restore ("latest" or a <stamp>-<run_id> dir)'
+        description: 'Which backup: "latest", a deploy run_id, or a full <stamp>-<run_id> dir'
         type: string
         required: true
       confirm:
@@ -79,8 +79,12 @@ jobs:
 
           if [ "$BACKUP" = "latest" ]; then
             SRC="$(ls -1dt "$DEST_ROOT"/*/ 2>/dev/null | head -n1)"
-          else
+          elif [ -d "$DEST_ROOT/$BACKUP" ]; then
+            # Full "<stamp>-<run_id>" dir name passed verbatim.
             SRC="$DEST_ROOT/$BACKUP/"
+          else
+            # Treat as a deploy run_id: match the "<stamp>-<run_id>" dir.
+            SRC="$(ls -1dt "$DEST_ROOT"/*-"$BACKUP"/ 2>/dev/null | head -n1)"
           fi
           if [ -z "${SRC:-}" ] || [ ! -d "$SRC" ]; then
             echo "Backup not found: '$BACKUP'"

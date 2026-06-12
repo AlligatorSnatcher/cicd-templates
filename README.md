@@ -136,7 +136,7 @@ jobs:
 |---|---|---|---|
 | `host` | ✅ | — | 要還原到的目標伺服器(IP / hostname) |
 | `folder` | ✅ | — | `/var` 底下的 app 資料夾 |
-| `backup` | ✅ | — | 要還原哪一份(`latest` 或某個 `<stamp>-<run_id>` 目錄) |
+| `backup` | ✅ | — | 要還原哪一份:`latest`、deploy 的 run_id,或完整 `<stamp>-<run_id>` 目錄名 |
 | `confirm` | ✅ | — | 必須等於 `folder`(打字確認 gate) |
 | `runner_label` | ✅ | — | runner label |
 
