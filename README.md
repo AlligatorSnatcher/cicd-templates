@@ -87,8 +87,41 @@ jobs:
 | `artifact` | ➖ | `publish` | artifact name to download |
 | `environment` | ➖ | `""` | GitHub environment for approval gating |
 
+## Changing a workflow
+
+Decide first *what* you're changing:
+
+- **Shared logic** (the build/backup/deploy steps themselves) → edit it **here**.
+- **Project-specific** (triggers, hosts, folders, which project to build,
+  approval gates) → edit the **caller** in the app repo, not this repo.
+
+Consumers pin `@v1`, which points at a specific commit — **editing `main` alone
+does nothing for them**. To roll a change out you must move (or cut) the tag:
+
+```bash
+# non-breaking change (add a step, fix a bug): move v1 forward
+git add -A && git commit -m "fix: ..."
+git push origin main
+git tag -f v1 && git push -f origin v1     # <-- the step people forget
+
+# then in the consumer repo: just re-run the job — it now picks up the new v1.
+# No caller edit needed (the @v1 ref is unchanged; only what it points to moved).
+```
+
+> If you skip the `git tag -f v1` step, consumers keep running the OLD v1 even
+> after re-running their jobs.
+
 ## Versioning
 
-Tagged releases. Consumers pin `@v1` (or a SHA). Breaking changes get a new
-major tag (`@v2`); the old tag keeps working so consumers migrate on their own
-schedule.
+`v1` is a **rolling major tag** (like `actions/checkout@v4`): non-breaking
+changes move it forward, so `@v1` consumers get them on the next run with no
+caller edit.
+
+| Change | Action here | Consumer |
+|---|---|---|
+| Non-breaking (add step, bug fix) | `git tag -f v1 && git push -f origin v1` | re-run job, picks it up |
+| Breaking (rename/required input) | cut a new tag `v2` | bump `@v1` → `@v2` per repo, on their own schedule |
+
+Breaking changes get a new major tag so the old one keeps working — consumers
+migrate when they choose. Pin a full SHA instead of `@v1` if you need a frozen,
+never-moving reference.
