@@ -15,7 +15,7 @@
 | [`backup.yml`](.github/workflows/backup.yml) | 從伺服器 rsync `/var/<folder>/` 到 host volume 的每次獨立備份目錄,只保留最新 N 份 |
 | [`deploy.yml`](.github/workflows/deploy.yml) | rsync artifact 到 `root@<host>:/var/<folder>/`(保留伺服器的 `appsettings.json`)。**無 gate** |
 | [`authorize.yml`](.github/workflows/authorize.yml) | **前置守門**:檢查 actor(`allowed_actors`)+ 選填 ref(`allowed_ref`)。擺在最前面,讓未授權/錯分支的 run 連 build/backup 都不跑 —— 給 prod 這種受保護的 |
-| [`restore.yml`](.github/workflows/restore.yml) | 從備份 rsync 回 `root@<host>:/var/<folder>/`(手動回滾;typed-confirm + 選填 actor gate;排除 `appsettings*.json`) |
+| [`restore.yml`](.github/workflows/restore.yml) | 從備份 rsync 回 `root@<host>:/var/<folder>/`(手動回滾;typed-confirm;排除 `appsettings*.json`)。授權由 caller 前置的 `authorize` 負責 |
 
 ## 前提假設
 
@@ -139,8 +139,8 @@ jobs:
 | `backup` | ✅ | — | 要還原哪一份(`latest` 或某個 `<stamp>-<run_id>` 目錄) |
 | `confirm` | ✅ | — | 必須等於 `folder`(打字確認 gate) |
 | `runner_label` | ✅ | — | runner label |
-| `allowed_actors` | ➖ | `""` | 選填 actor allow-list;空白 = 不檢查(例如 prod 才限定) |
 
+> 純還原動作,**不含授權**。需要限制誰能還原(例如 prod)時,caller 在前面加一個 `authorize` job(見 `authorize.yml`);dev 則直接不加。
 > 由 app repo 一個 `workflow_dispatch` 薄 caller 觸發(reusable workflow 不能直接被 dispatch)。
 > 從 runner 的 `BACKUP_DEST` 讀備份,排除 `appsettings*.json`(回滾保留伺服器當前 config)。
 
