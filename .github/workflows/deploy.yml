@@ -7,8 +7,8 @@
 # the SAME run (artifacts are shared across reusable jobs within one run).
 # host/folder are required inputs — nothing is hardcoded.
 #
-# --exclude appsettings.json + no --delete: overwrites/adds files but keeps the
-# server's own config and never removes files the server has gained.
+# --exclude 'appsettings*.json' + no --delete: overwrites/adds files but keeps
+# the server's own config and never removes files the server has gained.
 #
 name: Deploy (rsync artifact)
 
@@ -53,6 +53,6 @@ jobs:
         run: |
           set -euo pipefail
           echo "Deploying $GITHUB_WORKSPACE/publish/ -> root@$HOST:/var/$FOLDER/"
-          rsync -ptvrz --exclude appsettings.json \
+          rsync -ptvrz --exclude 'appsettings*.json' \
             "$GITHUB_WORKSPACE/publish/" "root@$HOST:/var/$FOLDER/"
           echo "Deploy complete."

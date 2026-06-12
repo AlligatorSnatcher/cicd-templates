@@ -16,7 +16,7 @@
 # build, put an actor-gate job first in the caller instead.
 #
 # The artifact must already have been uploaded by the build workflow earlier in
-# the SAME run. --exclude appsettings.json + no --delete: see deploy.yml.
+# the SAME run. --exclude 'appsettings*.json' + no --delete: see deploy.yml.
 #
 name: Deploy with approval (rsync artifact)
 
@@ -90,6 +90,6 @@ jobs:
         run: |
           set -euo pipefail
           echo "Deploying $GITHUB_WORKSPACE/publish/ -> root@$HOST:/var/$FOLDER/"
-          rsync -ptvrz --exclude appsettings.json \
+          rsync -ptvrz --exclude 'appsettings*.json' \
             "$GITHUB_WORKSPACE/publish/" "root@$HOST:/var/$FOLDER/"
           echo "Deploy complete."
