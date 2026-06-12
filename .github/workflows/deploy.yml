@@ -11,6 +11,10 @@
 # --exclude 'appsettings*.json' + no --delete: overwrites/adds files but keeps
 # the server's own config and never removes files the server has gained.
 #
+# Optional `service`: if set, the new code is activated by `systemctl restart`
+# over ssh after the rsync, then verified with `is-active` (a service that fails
+# to come back up fails the deploy). Empty = rsync only, no restart.
+#
 name: Deploy (rsync artifact)
 
 on:
@@ -33,6 +37,11 @@ on:
         type: string
         required: false
         default: "publish"
+      service:
+        description: "systemd unit to restart after deploy (empty = no restart)"
+        type: string
+        required: false
+        default: ""
 
 jobs:
   deploy:
@@ -58,3 +67,17 @@ jobs:
           rsync -ptvrz --exclude 'appsettings*.json' \
             "$GITHUB_WORKSPACE/publish/" "root@$HOST:/var/$FOLDER/"
           echo "Deploy complete."
+
+      - name: Restart service
+        # Activate the new code. Skipped when no service is given.
+        if: inputs.service != ''
+        env:
+          HOST: ${{ inputs.host }}
+          SERVICE: ${{ inputs.service }}
+        run: |
+          set -euo pipefail
+          : "${HOST:?host input is empty}"
+          echo "Restarting '$SERVICE' on root@$HOST"
+          # is-active makes a failed start fail the deploy (not a silent no-op).
+          ssh "root@$HOST" "systemctl restart '$SERVICE' && systemctl is-active '$SERVICE'"
+          echo "'$SERVICE' is active."

@@ -117,6 +117,7 @@ jobs:
 | `folder` | ✅ | — | `/var` 底下的 app 資料夾 |
 | `runner_label` | ✅ | — | runner label |
 | `artifact` | ➖ | `publish` | 要下載的 artifact 名稱 |
+| `service` | ➖ | `""` | 部署後要 `systemctl restart` 的 systemd unit;空白 = 不重啟 |
 
 ### authorize.yml(前置守門)
 | Input | 必填 | 預設 | 說明 |
