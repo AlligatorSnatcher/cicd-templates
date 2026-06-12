@@ -1,0 +1,69 @@
+# Reusable AUTHORIZE — front gate for protected pipelines (e.g. prod).
+#
+# Put this FIRST in the caller and make build/backup/deploy `needs: authorize`,
+# so an unauthorized / wrong-branch / misconfigured run is stopped BEFORE it
+# builds or snapshots anything. (deploy-approve.yml gates at deploy time, i.e.
+# AFTER build+backup — use this when you want the gate up front instead.)
+#
+# Checks three things at the very start of the run:
+#   * allowed_ref     — optional: run must come from this ref (e.g. release).
+#   * allowed_actors  — REQUIRED actor allow-list (space-separated logins).
+#                       Works on ANY plan. Soft control — editable by anyone with
+#                       write access — adequate for an internal team.
+#   * host            — REQUIRED, validated non-empty (fail-fast preflight). Pass
+#                       the repo var (e.g. vars.PROD_HOST) so a missing config
+#                       fails here with a clear message instead of rsync'ing to
+#                       an empty target downstream.
+#
+name: Authorize (front gate)
+
+on:
+  workflow_call:
+    inputs:
+      host:
+        description: "Target host; validated non-empty (pass vars.PROD_HOST)"
+        type: string
+        required: true
+      allowed_actors:
+        description: "Space-separated GitHub logins allowed to run (actor gate)"
+        type: string
+        required: true
+      allowed_ref:
+        description: "Restrict to this ref, e.g. refs/heads/release (empty = any)"
+        type: string
+        required: false
+        default: ""
+      runner_label:
+        description: "Extra self-hosted runner label to target (e.g. dev / prod)"
+        type: string
+        required: true
+
+jobs:
+  authorize:
+    name: authorize
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_label }}
+    steps:
+      - name: Authorize (ref + actor + host)
+        env:
+          ACTOR: ${{ github.actor }}
+          REF: ${{ github.ref }}
+          ALLOWED_ACTORS: ${{ inputs.allowed_actors }}
+          ALLOWED_REF: ${{ inputs.allowed_ref }}
+          HOST: ${{ inputs.host }}
+        run: |
+          set -euo pipefail
+          # Fail fast if the target host repo var is unset (preflight).
+          : "${HOST:?Target host is empty — set the repo variable (e.g. PROD_HOST) before running}"
+          # Optional: restrict which ref may run.
+          if [ -n "$ALLOWED_REF" ] && [ "$REF" != "$ALLOWED_REF" ]; then
+            echo "::error::Must run from '$ALLOWED_REF' (got '$REF')."
+            exit 1
+          fi
+          # Actor allow-list.
+          if [[ " $ALLOWED_ACTORS " != *" $ACTOR "* ]]; then
+            echo "::error::'$ACTOR' is not authorized. Allowed: $ALLOWED_ACTORS."
+            exit 1
+          fi
+          echo "Authorized: $ACTOR${ALLOWED_REF:+ (from $REF)} -> $HOST"

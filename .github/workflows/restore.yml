@@ -39,6 +39,11 @@ on:
         description: "Extra self-hosted runner label to target (must match the env)"
         type: string
         required: true
+      allowed_actors:
+        description: "Optional actor allow-list (space-separated logins); empty = no actor gate"
+        type: string
+        required: false
+        default: ""
 
 concurrency:
   group: restore-${{ inputs.folder }}
@@ -51,6 +56,20 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_label }}
     steps:
+      - name: Authorize (actor gate)
+        # Optional: restrict who may restore (e.g. prod). Empty = no gate (dev).
+        if: inputs.allowed_actors != ''
+        env:
+          ACTOR: ${{ github.actor }}
+          ALLOWED_ACTORS: ${{ inputs.allowed_actors }}
+        run: |
+          set -euo pipefail
+          if [[ " $ALLOWED_ACTORS " != *" $ACTOR "* ]]; then
+            echo "::error::'$ACTOR' is not authorized to restore. Allowed: $ALLOWED_ACTORS."
+            exit 1
+          fi
+          echo "Authorized: $ACTOR"
+
       - name: Restore from backup
         env:
           HOST: ${{ inputs.host }}
