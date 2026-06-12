@@ -91,14 +91,21 @@ jobs:
         run: |
           set -euo pipefail
           ROOT="${PUBLISH_DEST:?Set PUBLISH_DEST (mounted host path) on the runner to use stage mode}"
-          OUT="$ROOT/$ARTIFACT/$GITHUB_RUN_ID"
+          BASE="$ROOT/$ARTIFACT"
+          OUT="$BASE/$GITHUB_RUN_ID"
+          # Newest existing per-run dir (computed BEFORE creating OUT) — unchanged
+          # files are hardlinked from it via --link-dest, so a fresh per-run dir
+          # costs ~an incremental copy, not a full one. Skipped on the first run.
+          PREV="$(ls -1dt "$BASE"/*/ 2>/dev/null | head -n1 || true)"
+          LINK=()
+          [ -n "$PREV" ] && LINK=(--link-dest="$PREV")
           rm -rf "$OUT"
           mkdir -p "$OUT"
           # Exclude config so it never leaves the box; --delete keeps the dir clean.
-          rsync -a --delete --exclude 'appsettings*.json' "$GITHUB_WORKSPACE/publish/" "$OUT/"
-          echo "Staged -> $OUT"
+          rsync -a --delete "${LINK[@]}" --exclude 'appsettings*.json' "$GITHUB_WORKSPACE/publish/" "$OUT/"
+          echo "Staged -> $OUT${PREV:+ (hardlinked unchanged files from $PREV)}"
           # Prune to the newest $KEEP per-run dirs for this artifact.
-          ls -1dt "$ROOT/$ARTIFACT"/*/ 2>/dev/null | tail -n +"$((KEEP + 1))" | while read -r old; do
+          ls -1dt "$BASE"/*/ 2>/dev/null | tail -n +"$((KEEP + 1))" | while read -r old; do
             echo "Pruning old staged build: $old"
             rm -rf "$old"
           done
