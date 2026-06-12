@@ -13,6 +13,7 @@ approval gates) and calls these for the actual build / backup / deploy logic.
 | Workflow | What it does |
 |---|---|
 | [`build.yml`](.github/workflows/build.yml) | `dotnet publish` a project, upload the result as an artifact (excludes `appsettings*.json`) |
+| [`test.yml`](.github/workflows/test.yml) | `dotnet test` a test project or solution |
 | [`backup.yml`](.github/workflows/backup.yml) | rsync `/var/<folder>/` from a server into a per-run backup dir on a host volume, prune to the newest N |
 | [`deploy.yml`](.github/workflows/deploy.yml) | rsync a built artifact onto `root@<host>:/var/<folder>/` (keeps the server's `appsettings.json`) |
 
@@ -69,6 +70,17 @@ jobs:
 | `runner_label` | ✅ | — | extra runner label (e.g. `dev` / `prod`) |
 | `config` | ➖ | `Debug` | build configuration |
 | `artifact` | ➖ | `publish` | uploaded artifact name |
+
+### test.yml
+| Input | Required | Default | Notes |
+|---|---|---|---|
+| `project` | ✅ | — | test `.csproj` or `.sln` to run |
+| `runner_label` | ✅ | — | extra runner label (e.g. `dev` / `prod`) |
+| `config` | ➖ | `Debug` | build configuration |
+
+> The runner must have the SDK for the test project's target framework
+> (`dotnet test` builds it). E.g. a `netcoreapp3.1` test project needs the 3.1
+> SDK on the runner.
 
 ### backup.yml
 | Input | Required | Default | Notes |

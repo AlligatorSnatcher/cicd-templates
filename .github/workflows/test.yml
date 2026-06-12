@@ -1,0 +1,47 @@
+# Reusable TEST — dotnet test a project or solution.
+#
+# Generic building block. Call it from an app repo via `uses:`. Pass the test
+# project (or .sln) and a runner label; nothing is hardcoded here.
+#
+# ASSUMES: the runner has the .NET SDK for the TEST project's target framework.
+# `dotnet test` builds the test project, so e.g. a netcoreapp3.1 test project
+# needs the 3.1 SDK on the runner — make sure the runner image provides it.
+#
+name: Test (dotnet test)
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: "Path to the test .csproj or .sln to run (e.g. test/MyApp.Tests/MyApp.Tests.csproj)"
+        type: string
+        required: true
+      runner_label:
+        description: "Extra self-hosted runner label to target (e.g. dev / prod)"
+        type: string
+        required: true
+      config:
+        description: "Build configuration (Debug / Release)"
+        type: string
+        required: false
+        default: "Debug"
+
+jobs:
+  test:
+    name: test (${{ inputs.config }})
+    runs-on:
+      - self-hosted
+      - ${{ inputs.runner_label }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test — dotnet test
+        env:
+          PROJECT: ${{ inputs.project }}
+          CONFIG: ${{ inputs.config }}
+        run: |
+          set -euo pipefail
+          dotnet --info | head -n 5 || true
+          dotnet test "$PROJECT" -c "$CONFIG" --logger "console;verbosity=normal"
+          echo "Tests passed for $PROJECT ($CONFIG)."
