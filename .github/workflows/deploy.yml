@@ -1,8 +1,11 @@
 # Reusable DEPLOY — rsync a built artifact onto root@<host>:/var/<folder>/.
 #
-# Generic building block. The artifact must already have been uploaded by the
-# build workflow earlier in the SAME run (artifacts are shared across reusable
-# jobs within one run). host/folder are required inputs — nothing is hardcoded.
+# Generic building block, NO approval gate — for non-gated environments (e.g.
+# dev). For a gated deploy (e.g. prod), use deploy-approve.yml instead.
+#
+# The artifact must already have been uploaded by the build workflow earlier in
+# the SAME run (artifacts are shared across reusable jobs within one run).
+# host/folder are required inputs — nothing is hardcoded.
 #
 # --exclude appsettings.json + no --delete: overwrites/adds files but keeps the
 # server's own config and never removes files the server has gained.
@@ -29,11 +32,6 @@ on:
         type: string
         required: false
         default: "publish"
-      environment:
-        description: "GitHub environment (for approval gating / scoped vars)"
-        type: string
-        required: false
-        default: ""
 
 jobs:
   deploy:
@@ -41,9 +39,6 @@ jobs:
     runs-on:
       - self-hosted
       - ${{ inputs.runner_label }}
-    # Optional approval / scoping hook. Pass an environment with required
-    # reviewers to gate here; pass "" for no gate.
-    environment: ${{ inputs.environment }}
     steps:
       - name: Download build artifact
         uses: actions/download-artifact@v4

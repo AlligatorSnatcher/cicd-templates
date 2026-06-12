@@ -15,7 +15,8 @@ approval gates) and calls these for the actual build / backup / deploy logic.
 | [`build.yml`](.github/workflows/build.yml) | `dotnet publish` a project, upload the result as an artifact (excludes `appsettings*.json`) |
 | [`test.yml`](.github/workflows/test.yml) | `dotnet test` a test project or solution |
 | [`backup.yml`](.github/workflows/backup.yml) | rsync `/var/<folder>/` from a server into a per-run backup dir on a host volume, prune to the newest N |
-| [`deploy.yml`](.github/workflows/deploy.yml) | rsync a built artifact onto `root@<host>:/var/<folder>/` (keeps the server's `appsettings.json`) |
+| [`deploy.yml`](.github/workflows/deploy.yml) | rsync a built artifact onto `root@<host>:/var/<folder>/` (keeps the server's `appsettings.json`). **No gate** — for non-gated envs like dev |
+| [`deploy-approve.yml`](.github/workflows/deploy-approve.yml) | Same as `deploy.yml`, but gated by a GitHub environment + **fail-closed** reviewer check — for protected envs like prod |
 
 ## Assumptions
 
@@ -90,14 +91,31 @@ jobs:
 | `runner_label` | ✅ | — | extra runner label |
 | `keep` | ➖ | `5` | how many recent backups to keep |
 
-### deploy.yml
+### deploy.yml (no gate)
 | Input | Required | Default | Notes |
 |---|---|---|---|
 | `host` | ✅ | — | target server (IP / hostname) |
 | `folder` | ✅ | — | app folder under `/var` |
 | `runner_label` | ✅ | — | extra runner label |
 | `artifact` | ➖ | `publish` | artifact name to download |
-| `environment` | ➖ | `""` | GitHub environment for approval gating |
+
+### deploy-approve.yml (actor-gated)
+| Input | Required | Default | Notes |
+|---|---|---|---|
+| `host` | ✅ | — | target server (IP / hostname) |
+| `folder` | ✅ | — | app folder under `/var` |
+| `runner_label` | ✅ | — | extra runner label |
+| `allowed_actors` | ✅ | — | space-separated GitHub logins allowed to deploy. **Works on any plan** |
+| `allowed_ref` | ➖ | `""` | restrict to a ref, e.g. `refs/heads/release` |
+| `artifact` | ➖ | `publish` | artifact name to download |
+
+> **Soft control**: a user with write access could edit the workflow to bypass
+> the actor gate. GitHub environment Required reviewers would be stronger but
+> need a paid plan on private repos.
+>
+> **Gate timing**: the gate runs at the start of this deploy job — if called
+> after build/backup, those run first. To block unauthorized runs before build,
+> put an actor-gate job first in the caller instead.
 
 ## Changing a workflow
 
