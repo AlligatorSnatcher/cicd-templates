@@ -91,9 +91,10 @@ jobs:
         run: |
           set -euo pipefail
           ROOT="${PUBLISH_DEST:?Set PUBLISH_DEST (mounted host path) on the runner to use stage mode}"
-          # Namespace by repo so projects sharing a runner host (and the same
-          # artifact name) never collide or share each other's prune pool.
-          BASE="$ROOT/$GITHUB_REPOSITORY/$ARTIFACT"
+          # Namespace by repo name (owner stripped) so projects sharing a runner
+          # host with the same artifact name never collide or share a prune pool.
+          REPO="${GITHUB_REPOSITORY##*/}"
+          BASE="$ROOT/$REPO/$ARTIFACT"
           OUT="$BASE/$GITHUB_RUN_ID"
           # Newest existing per-run dir (computed BEFORE creating OUT) — unchanged
           # files are hardlinked from it via --link-dest, so a fresh per-run dir

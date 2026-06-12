@@ -99,8 +99,9 @@ jobs:
           : "${HOST:?host input is empty — set the target server repo var before running}"
           if [ "$STAGE" = "true" ]; then
             ROOT="${PUBLISH_DEST:?Set PUBLISH_DEST (mounted host path) on the runner to use stage mode}"
-            # Must match build's path (namespaced by repo).
-            SRC="$ROOT/$GITHUB_REPOSITORY/$ARTIFACT/$GITHUB_RUN_ID/"
+            # Must match build's path (namespaced by repo name, owner stripped).
+            REPO="${GITHUB_REPOSITORY##*/}"
+            SRC="$ROOT/$REPO/$ARTIFACT/$GITHUB_RUN_ID/"
             [ -d "$SRC" ] || { echo "::error::Staged build not found: $SRC (did build run with stage: true?)"; exit 1; }
           else
             SRC="$GITHUB_WORKSPACE/publish/"
