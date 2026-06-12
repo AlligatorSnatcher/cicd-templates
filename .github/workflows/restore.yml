@@ -16,6 +16,10 @@
 # (e.g. prod) needs an actor/ref gate, the caller puts an `authorize` job in
 # front of this one (see authorize.yml). dev callers can skip the gate entirely.
 #
+# Optional `service`: if set, `systemctl restart` over ssh after the restore so
+# the rolled-back code actually takes effect, verified with `is-active`. Empty =
+# files only, no restart (mirrors deploy.yml).
+#
 # Pick the backup via `backup`: "latest" or a specific "<stamp>-<run_id>" dir
 # name (the step prints what's on disk).
 #
@@ -45,6 +49,11 @@ on:
         description: "Extra self-hosted runner label to target (must match the env)"
         type: string
         required: true
+      service:
+        description: "systemd unit to restart after restore (empty = no restart)"
+        type: string
+        required: false
+        default: ""
 
 concurrency:
   group: restore-${{ inputs.folder }}
@@ -98,3 +107,17 @@ jobs:
           # Exclude config so a rollback keeps the server's CURRENT appsettings.
           rsync -ptvrz --exclude 'appsettings*.json' "$SRC" "root@$HOST:/var/$FOLDER/"
           echo "Restore complete from: $SRC"
+
+      - name: Restart service
+        # Activate the rolled-back code. Skipped when no service is given.
+        if: inputs.service != ''
+        env:
+          HOST: ${{ inputs.host }}
+          SERVICE: ${{ inputs.service }}
+        run: |
+          set -euo pipefail
+          : "${HOST:?host input is empty}"
+          echo "Restarting '$SERVICE' on root@$HOST"
+          # is-active makes a failed start fail the restore (not a silent no-op).
+          ssh "root@$HOST" "systemctl restart '$SERVICE' && systemctl is-active '$SERVICE'"
+          echo "'$SERVICE' is active."

@@ -140,6 +140,7 @@ jobs:
 | `backup` | ✅ | — | 要還原哪一份:`latest`、deploy 的 run_id,或完整 `<stamp>-<run_id>` 目錄名 |
 | `confirm` | ➖ | `""` | 選填打字確認:有給就必須等於 `folder`;空白 = 不檢查 |
 | `runner_label` | ✅ | — | runner label |
+| `service` | ➖ | `""` | 還原後要 `systemctl restart` 的 systemd unit;空白 = 不重啟 |
 
 > 純還原動作,**不含授權**。需要限制誰能還原(例如 prod)時,caller 在前面加一個 `authorize` job(見 `authorize.yml`);dev 則直接不加。
 > 由 app repo 一個 `workflow_dispatch` 薄 caller 觸發(reusable workflow 不能直接被 dispatch)。
