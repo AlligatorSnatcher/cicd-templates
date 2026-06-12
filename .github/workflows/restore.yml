@@ -8,8 +8,9 @@
 # server's current config. No --delete, so files the server gained since the
 # backup are left in place.
 #
-# WRITES TO THE LIVE SERVER — gated by a typed confirmation (`confirm` must equal
-# `folder`). Reads backups from $BACKUP_DEST (inherited from the runner env).
+# WRITES TO THE LIVE SERVER. Optional typed-confirmation gate: if `confirm` is
+# given it must equal `folder`; leave it empty to skip the gate. Reads backups
+# from $BACKUP_DEST (inherited from the runner env).
 #
 # AUTHORIZATION is NOT done here — this is a pure restore action. If a target
 # (e.g. prod) needs an actor/ref gate, the caller puts an `authorize` job in
@@ -36,9 +37,10 @@ on:
         type: string
         required: true
       confirm:
-        description: "Must equal `folder` to proceed (typed-confirmation gate)"
+        description: "Optional typed-confirmation: if set, must equal `folder`; empty = no gate"
         type: string
-        required: true
+        required: false
+        default: ""
       runner_label:
         description: "Extra self-hosted runner label to target (must match the env)"
         type: string
@@ -71,8 +73,9 @@ jobs:
           echo "Available backups under $DEST_ROOT:"
           ls -1dt "$DEST_ROOT"/*/ 2>/dev/null || { echo "  (none found)"; exit 1; }
 
-          # Safety gate: must type the folder name exactly.
-          if [ "$CONFIRM" != "$FOLDER" ]; then
+          # Optional safety gate: when a confirm value is given it must match the
+          # folder name. Empty = no gate (caller relies on a front authorize job).
+          if [ -n "$CONFIRM" ] && [ "$CONFIRM" != "$FOLDER" ]; then
             echo "Confirmation mismatch: type the folder name '$FOLDER' in the confirm box to proceed."
             exit 1
           fi

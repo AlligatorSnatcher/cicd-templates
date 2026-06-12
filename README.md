@@ -137,7 +137,7 @@ jobs:
 | `host` | ✅ | — | 要還原到的目標伺服器(IP / hostname) |
 | `folder` | ✅ | — | `/var` 底下的 app 資料夾 |
 | `backup` | ✅ | — | 要還原哪一份:`latest`、deploy 的 run_id,或完整 `<stamp>-<run_id>` 目錄名 |
-| `confirm` | ✅ | — | 必須等於 `folder`(打字確認 gate) |
+| `confirm` | ➖ | `""` | 選填打字確認:有給就必須等於 `folder`;空白 = 不檢查 |
 | `runner_label` | ✅ | — | runner label |
 
 > 純還原動作,**不含授權**。需要限制誰能還原(例如 prod)時,caller 在前面加一個 `authorize` job(見 `authorize.yml`);dev 則直接不加。
