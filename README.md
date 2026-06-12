@@ -16,7 +16,7 @@ approval gates) and calls these for the actual build / backup / deploy logic.
 | [`test.yml`](.github/workflows/test.yml) | `dotnet test` a test project or solution |
 | [`backup.yml`](.github/workflows/backup.yml) | rsync `/var/<folder>/` from a server into a per-run backup dir on a host volume, prune to the newest N |
 | [`deploy.yml`](.github/workflows/deploy.yml) | rsync a built artifact onto `root@<host>:/var/<folder>/` (keeps the server's `appsettings.json`). **No gate** — for non-gated envs like dev |
-| [`deploy-approve.yml`](.github/workflows/deploy-approve.yml) | Same as `deploy.yml`, but gated by a GitHub environment + **fail-closed** reviewer check — for protected envs like prod |
+| [`deploy-approve.yml`](.github/workflows/deploy-approve.yml) | Same as `deploy.yml`, but **actor-gated** (`allowed_actors` + optional `allowed_ref`) — for protected envs like prod |
 
 ## Assumptions
 
@@ -26,6 +26,31 @@ approval gates) and calls these for the actual build / backup / deploy logic.
 - `backup.yml` needs `BACKUP_DEST` set on the runner (a host path mounted into
   the runner container) — it is inherited from the runner env, not an input.
 - SSH access to `root@<host>` is available from the runner.
+
+## GitHub settings (one-time)
+
+Two settings let other repos use these workflows. Set them once — new repos in
+the org inherit them, no per-project setup.
+
+### Org-level — Actions permissions
+Org → Settings → Actions → General → Policies. Use a scoped allow-list rather
+than "Allow all actions" (important: self-hosted runners mount SSH keys and the
+Docker socket, so a malicious third-party action could reach internal hosts):
+
+> **Allow `<org>`, and select non-`<org>` actions and reusable workflows**
+> - ☑ Allow actions created by GitHub  → for `actions/checkout`, `upload-/download-artifact`
+> - ☑ Allow actions by Marketplace verified creators  → for `docker/*` (e.g. ci-images)
+
+This governs which actions/reusable workflows a **consumer** repo may call.
+
+### This repo's visibility — access for consumers
+- **Public** (current): no setup — any repo can `uses:` these workflows.
+- **Private**: Settings → Actions → General → **Access** →
+  *"Accessible from repositories in the `<org>` organization"*. Only same-org
+  repos can then use them; repos outside the org cannot (use Public for that).
+
+> Org policy = the consumer is *allowed to call*. Repo Access = this repo is
+> *shared out* (private only). Private needs both; public needs only the org policy.
 
 ## Usage
 
