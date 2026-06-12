@@ -118,6 +118,7 @@ jobs:
 | `runner_label` | ✅ | — | runner label |
 | `artifact` | ➖ | `publish` | 要下載的 artifact 名稱 |
 | `service` | ➖ | `""` | 部署後要 `systemctl restart` 的 systemd unit;空白 = 不重啟 |
+| `delay_seconds` | ➖ | `0` | 部署前先等待秒數(滾動部署:第二台串在第一台後面並設延遲) |
 
 ### authorize.yml(前置守門)
 | Input | 必填 | 預設 | 說明 |

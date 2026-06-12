@@ -15,6 +15,10 @@
 # over ssh after the rsync, then verified with `is-active` (a service that fails
 # to come back up fails the deploy). Empty = rsync only, no restart.
 #
+# Optional `delay_seconds`: wait this long BEFORE deploying. For rolling deploys,
+# call this workflow once per host in sequence (`needs:`) and give the later
+# host(s) a delay so each is touched only after the previous one is back up.
+#
 name: Deploy (rsync artifact)
 
 on:
@@ -42,6 +46,11 @@ on:
         type: string
         required: false
         default: ""
+      delay_seconds:
+        description: "Seconds to wait BEFORE starting (rolling deploys; 0 = no wait)"
+        type: string
+        required: false
+        default: "0"
 
 jobs:
   deploy:
@@ -50,6 +59,17 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_label }}
     steps:
+      - name: Wait before deploy (rolling)
+        # Space out hosts in a rolling deploy: the 2nd host waits for the 1st to
+        # finish + this delay before it's touched. 0 = deploy immediately.
+        if: inputs.delay_seconds != '0' && inputs.delay_seconds != ''
+        env:
+          DELAY: ${{ inputs.delay_seconds }}
+        run: |
+          set -euo pipefail
+          echo "Waiting ${DELAY}s before deploying ${{ inputs.host }}…"
+          sleep "$DELAY"
+
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
