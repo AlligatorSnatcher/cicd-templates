@@ -23,6 +23,10 @@
   工具鏈(dotnet、rsync、ssh)預期已在 runner 上(例如 org 的 `dotnet-runner` image)。
 - `backup.yml` 需要 runner 上有 `BACKUP_DEST`(掛進容器的 host 路徑)—— 由 runner 的環境變數繼承,不是 input。
 - runner 能 SSH 到 `root@<host>`。
+- **stage 傳輸模式(選用)**:build/deploy 設 `stage: true` 時,改用掛載的 host volume `PUBLISH_DEST`
+  交接 publish(`$PUBLISH_DEST/<artifact>/<run_id>/`),不走 GitHub artifact storage —— 當 artifact
+  連線是瓶頸時快很多。前提:build 與 deploy 的 runner 看得到**同一個** `PUBLISH_DEST`(單台 runner
+  或共用掛載),跟 `BACKUP_DEST` 同樣假設。
 
 ## GitHub 設定(一次性)
 
@@ -90,7 +94,8 @@ jobs:
 | `project` | ✅ | — | 要 publish 的 `.csproj` 路徑 |
 | `runner_label` | ✅ | — | runner label(例如 `dev` / `prod`) |
 | `config` | ➖ | `Debug` | build 設定 |
-| `artifact` | ➖ | `publish` | 上傳的 artifact 名稱 |
+| `artifact` | ➖ | `publish` | 上傳的 artifact 名稱(stage 模式下也是 `$PUBLISH_DEST` 底下的 per-run 子目錄名) |
+| `stage` | ➖ | `false` | `true` = rsync 到 `$PUBLISH_DEST` host volume,不走 artifact(deploy 要設一樣) |
 
 ### test.yml
 | Input | 必填 | 預設 | 說明 |
@@ -119,6 +124,7 @@ jobs:
 | `artifact` | ➖ | `publish` | 要下載的 artifact 名稱 |
 | `service` | ➖ | `""` | 部署後要 `systemctl restart` 的 systemd unit;空白 = 不重啟 |
 | `delay_seconds` | ➖ | `0` | 部署前先等待秒數(滾動部署:第二台串在第一台後面並設延遲) |
+| `stage` | ➖ | `false` | `true` = 從 `$PUBLISH_DEST` host volume 讀 publish,不下載 artifact(要跟 build 一致) |
 
 ### authorize.yml(前置守門)
 | Input | 必填 | 預設 | 說明 |

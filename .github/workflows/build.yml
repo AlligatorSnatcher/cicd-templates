@@ -9,6 +9,15 @@
 # SECRETS: the artifact EXCLUDES appsettings*.json so config never leaves the
 # network into GitHub artifact storage; the server keeps its own config.
 #
+# TRANSPORT — two ways to hand the build off to deploy:
+#   * artifact (default): upload-artifact, downloaded by deploy. Portable, but
+#     round-trips through GitHub artifact storage (slow on a constrained link).
+#   * stage (`stage: true`): rsync the publish into a per-run dir on a host volume
+#     mounted into the runner ($PUBLISH_DEST/<artifact>/<run_id>/); deploy reads
+#     it from there. Stays on the LAN — far faster when the artifact link is the
+#     bottleneck. Requires the SAME $PUBLISH_DEST visible to build AND deploy
+#     runners (single runner host, or a shared mount), like BACKUP_DEST.
+#
 name: Build (dotnet publish)
 
 on:
@@ -28,10 +37,15 @@ on:
         required: false
         default: "Debug"
       artifact:
-        description: "Artifact name to upload"
+        description: "Artifact name to upload (also the per-run subdir under $PUBLISH_DEST in stage mode)"
         type: string
         required: false
         default: "publish"
+      stage:
+        description: "true = rsync publish to $PUBLISH_DEST host volume instead of upload-artifact"
+        type: string
+        required: false
+        default: "false"
 
 jobs:
   build:
@@ -55,6 +69,7 @@ jobs:
           echo "Published $CONFIG -> $GITHUB_WORKSPACE/publish"
 
       - name: Upload build artifact (excludes appsettings*.json)
+        if: inputs.stage != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact }}
@@ -64,3 +79,26 @@ jobs:
             !publish/appsettings*.json
           retention-days: 3
           if-no-files-found: error
+
+      - name: Stage publish to host volume (LAN handoff)
+        # Alternative to artifacts: drop the publish into a per-run dir on a
+        # mounted host volume that deploy reads from — no GitHub artifact storage.
+        if: inputs.stage == 'true'
+        env:
+          ARTIFACT: ${{ inputs.artifact }}
+          KEEP: "5"
+          # PUBLISH_DEST inherited from the runner container's env (like BACKUP_DEST).
+        run: |
+          set -euo pipefail
+          ROOT="${PUBLISH_DEST:?Set PUBLISH_DEST (mounted host path) on the runner to use stage mode}"
+          OUT="$ROOT/$ARTIFACT/$GITHUB_RUN_ID"
+          rm -rf "$OUT"
+          mkdir -p "$OUT"
+          # Exclude config so it never leaves the box; --delete keeps the dir clean.
+          rsync -a --delete --exclude 'appsettings*.json' "$GITHUB_WORKSPACE/publish/" "$OUT/"
+          echo "Staged -> $OUT"
+          # Prune to the newest $KEEP per-run dirs for this artifact.
+          ls -1dt "$ROOT/$ARTIFACT"/*/ 2>/dev/null | tail -n +"$((KEEP + 1))" | while read -r old; do
+            echo "Pruning old staged build: $old"
+            rm -rf "$old"
+          done

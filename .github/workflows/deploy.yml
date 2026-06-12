@@ -19,6 +19,10 @@
 # call this workflow once per host in sequence (`needs:`) and give the later
 # host(s) a delay so each is touched only after the previous one is back up.
 #
+# TRANSPORT (`stage`): must match the build job. Default reads the GitHub
+# artifact; `stage: true` reads the publish from $PUBLISH_DEST/<artifact>/<run_id>/
+# on the mounted host volume (no artifact download) — see build.yml.
+#
 name: Deploy (rsync artifact)
 
 on:
@@ -51,6 +55,11 @@ on:
         type: string
         required: false
         default: "0"
+      stage:
+        description: "true = read publish from $PUBLISH_DEST host volume instead of artifact (match build)"
+        type: string
+        required: false
+        default: "false"
 
 jobs:
   deploy:
@@ -71,6 +80,7 @@ jobs:
           sleep "$DELAY"
 
       - name: Download build artifact
+        if: inputs.stage != 'true'
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.artifact }}
@@ -80,12 +90,21 @@ jobs:
         env:
           HOST: ${{ inputs.host }}
           FOLDER: ${{ inputs.folder }}
+          ARTIFACT: ${{ inputs.artifact }}
+          STAGE: ${{ inputs.stage }}
+          # PUBLISH_DEST inherited from the runner container's env (stage mode only).
         run: |
           set -euo pipefail
           : "${HOST:?host input is empty — set the target server repo var before running}"
-          echo "Deploying $GITHUB_WORKSPACE/publish/ -> root@$HOST:/var/$FOLDER/"
-          rsync -ptvrz --exclude 'appsettings*.json' \
-            "$GITHUB_WORKSPACE/publish/" "root@$HOST:/var/$FOLDER/"
+          if [ "$STAGE" = "true" ]; then
+            ROOT="${PUBLISH_DEST:?Set PUBLISH_DEST (mounted host path) on the runner to use stage mode}"
+            SRC="$ROOT/$ARTIFACT/$GITHUB_RUN_ID/"
+            [ -d "$SRC" ] || { echo "::error::Staged build not found: $SRC (did build run with stage: true?)"; exit 1; }
+          else
+            SRC="$GITHUB_WORKSPACE/publish/"
+          fi
+          echo "Deploying $SRC -> root@$HOST:/var/$FOLDER/"
+          rsync -ptvrz --exclude 'appsettings*.json' "$SRC" "root@$HOST:/var/$FOLDER/"
           echo "Deploy complete."
 
       - name: Restart service
