@@ -52,6 +52,7 @@ jobs:
           FOLDER: ${{ inputs.folder }}
         run: |
           set -euo pipefail
+          : "${HOST:?host input is empty — set the target server repo var before running}"
           echo "Deploying $GITHUB_WORKSPACE/publish/ -> root@$HOST:/var/$FOLDER/"
           rsync -ptvrz --exclude 'appsettings*.json' \
             "$GITHUB_WORKSPACE/publish/" "root@$HOST:/var/$FOLDER/"

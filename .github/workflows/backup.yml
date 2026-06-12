@@ -57,6 +57,7 @@ jobs:
           # BACKUP_DEST inherited from the runner container's env (see docs).
         run: |
           set -euo pipefail
+          : "${HOST:?host input is empty — set the target server repo var before running}"
           ROOT="${BACKUP_DEST:?Set repo variable BACKUP_DEST to the mounted host path (e.g. /codebkp)}"
           DEST_ROOT="$ROOT/$FOLDER"
           STAMP="$(date +%Y%m%d%H%M%S)"

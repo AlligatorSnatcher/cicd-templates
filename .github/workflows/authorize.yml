@@ -10,20 +10,16 @@
 #   * allowed_actors  — REQUIRED actor allow-list (space-separated logins).
 #                       Works on ANY plan. Soft control — editable by anyone with
 #                       write access — adequate for an internal team.
-#   * host            — REQUIRED, validated non-empty (fail-fast preflight). Pass
-#                       the repo var (e.g. vars.PROD_HOST) so a missing config
-#                       fails here with a clear message instead of rsync'ing to
-#                       an empty target downstream.
+#
+# This gate is AUTHORIZATION only (who / which ref). Config validation — e.g.
+# "is PROD_HOST set?" — belongs to the building blocks that consume it: backup /
+# deploy / restore each fail fast on an empty host input.
 #
 name: Authorize (front gate)
 
 on:
   workflow_call:
     inputs:
-      host:
-        description: "Target host; validated non-empty (pass vars.PROD_HOST)"
-        type: string
-        required: true
       allowed_actors:
         description: "Space-separated GitHub logins allowed to run (actor gate)"
         type: string
@@ -45,17 +41,14 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_label }}
     steps:
-      - name: Authorize (ref + actor + host)
+      - name: Authorize (ref + actor)
         env:
           ACTOR: ${{ github.actor }}
           REF: ${{ github.ref }}
           ALLOWED_ACTORS: ${{ inputs.allowed_actors }}
           ALLOWED_REF: ${{ inputs.allowed_ref }}
-          HOST: ${{ inputs.host }}
         run: |
           set -euo pipefail
-          # Fail fast if the target host repo var is unset (preflight).
-          : "${HOST:?Target host is empty — set the repo variable (e.g. PROD_HOST) before running}"
           # Optional: restrict which ref may run.
           if [ -n "$ALLOWED_REF" ] && [ "$REF" != "$ALLOWED_REF" ]; then
             echo "::error::Must run from '$ALLOWED_REF' (got '$REF')."
@@ -66,4 +59,4 @@ jobs:
             echo "::error::'$ACTOR' is not authorized. Allowed: $ALLOWED_ACTORS."
             exit 1
           fi
-          echo "Authorized: $ACTOR${ALLOWED_REF:+ (from $REF)} -> $HOST"
+          echo "Authorized: $ACTOR${ALLOWED_REF:+ (from $REF)}"
