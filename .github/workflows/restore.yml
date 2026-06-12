@@ -20,6 +20,10 @@
 # the rolled-back code actually takes effect, verified with `is-active`. Empty =
 # files only, no restart (mirrors deploy.yml).
 #
+# Optional `delay_seconds`: wait this long BEFORE restoring. For rolling restores
+# (multi-host), call this workflow once per host in sequence (`needs:`) and give
+# the later host(s) a delay so each is touched only after the previous is back up.
+#
 # Pick the backup via `backup`: "latest" or a specific "<stamp>-<run_id>" dir
 # name (the step prints what's on disk).
 #
@@ -54,6 +58,11 @@ on:
         type: string
         required: false
         default: ""
+      delay_seconds:
+        description: "Seconds to wait BEFORE starting (rolling restores; 0 = no wait)"
+        type: string
+        required: false
+        default: "0"
 
 concurrency:
   group: restore-${{ inputs.folder }}
@@ -66,6 +75,17 @@ jobs:
       - self-hosted
       - ${{ inputs.runner_label }}
     steps:
+      - name: Wait before restore (rolling)
+        # Space out hosts in a rolling restore: the 2nd host waits for the 1st to
+        # finish + this delay before it's touched. 0 = restore immediately.
+        if: inputs.delay_seconds != '0' && inputs.delay_seconds != ''
+        env:
+          DELAY: ${{ inputs.delay_seconds }}
+        run: |
+          set -euo pipefail
+          echo "Waiting ${DELAY}s before restoring ${{ inputs.host }}…"
+          sleep "$DELAY"
+
       - name: Restore from backup
         env:
           HOST: ${{ inputs.host }}
