@@ -1,60 +1,54 @@
 # cicd-templates
 
-Reusable GitHub Actions workflows (the `uses:` building blocks) shared across
-projects. Each app repo keeps its own thin *caller* workflows (triggers, hosts,
-approval gates) and calls these for the actual build / backup / deploy logic.
+跨專案共用的 GitHub Actions reusable workflows(`uses:` 積木)。各 app repo 只留薄薄的
+*caller* workflow(觸發條件、host、gate),實際的 build / backup / deploy 邏輯都呼叫這裡。
 
-> This repo is **public** so projects outside the org can reference it. It
-> therefore contains **no** hosts, IPs, folder names, or secrets — every
-> environment-specific value is a required input passed in by the caller.
+> 這個 repo 是 **public**,讓 org 外的專案也能引用。因此**不含**任何 host、IP、folder 名稱或
+> secret —— 所有環境專屬的值都由 caller 以必填 input 傳入。
 
 ## Workflows
 
-| Workflow | What it does |
+| Workflow | 做什麼 |
 |---|---|
-| [`build.yml`](.github/workflows/build.yml) | `dotnet publish` a project, upload the result as an artifact (excludes `appsettings*.json`) |
-| [`test.yml`](.github/workflows/test.yml) | `dotnet test` a test project or solution |
-| [`backup.yml`](.github/workflows/backup.yml) | rsync `/var/<folder>/` from a server into a per-run backup dir on a host volume, prune to the newest N |
-| [`deploy.yml`](.github/workflows/deploy.yml) | rsync a built artifact onto `root@<host>:/var/<folder>/` (keeps the server's `appsettings.json`). **No gate** — for non-gated envs like dev |
-| [`deploy-approve.yml`](.github/workflows/deploy-approve.yml) | Same as `deploy.yml`, but **actor-gated** (`allowed_actors` + optional `allowed_ref`) — for protected envs like prod |
+| [`build.yml`](.github/workflows/build.yml) | `dotnet publish` 一個專案,上傳成 artifact(排除 `appsettings*.json`) |
+| [`test.yml`](.github/workflows/test.yml) | `dotnet test` 一個測試專案或 solution |
+| [`backup.yml`](.github/workflows/backup.yml) | 從伺服器 rsync `/var/<folder>/` 到 host volume 的每次獨立備份目錄,只保留最新 N 份 |
+| [`deploy.yml`](.github/workflows/deploy.yml) | rsync artifact 到 `root@<host>:/var/<folder>/`(保留伺服器的 `appsettings.json`)。**無 gate** —— 給 dev 這種不需核准的 |
+| [`deploy-approve.yml`](.github/workflows/deploy-approve.yml) | 同 `deploy.yml`,但有 **actor gate**(`allowed_actors` + 選填 `allowed_ref`)—— 給 prod 這種受保護的 |
 
-## Assumptions
+## 前提假設
 
-- Jobs run on **self-hosted runners** (`runs-on: [self-hosted, <runner_label>]`).
-  No `container:` — the toolchain (dotnet, rsync, ssh) is expected on the runner
-  (e.g. the org's `dotnet-runner` image).
-- `backup.yml` needs `BACKUP_DEST` set on the runner (a host path mounted into
-  the runner container) — it is inherited from the runner env, not an input.
-- SSH access to `root@<host>` is available from the runner.
+- job 跑在 **self-hosted runner**(`runs-on: [self-hosted, <runner_label>]`)。不用 `container:` ——
+  工具鏈(dotnet、rsync、ssh)預期已在 runner 上(例如 org 的 `dotnet-runner` image)。
+- `backup.yml` 需要 runner 上有 `BACKUP_DEST`(掛進容器的 host 路徑)—— 由 runner 的環境變數繼承,不是 input。
+- runner 能 SSH 到 `root@<host>`。
 
-## GitHub settings (one-time)
+## GitHub 設定(一次性)
 
-Two settings let other repos use these workflows. Set them once — new repos in
-the org inherit them, no per-project setup.
+兩個設定讓其他 repo 能用這些 workflow。**設一次,org 內新 repo 自動繼承,不用每個專案重設。**
 
-### Org-level — Actions permissions
-Org → Settings → Actions → General → Policies. Use a scoped allow-list rather
-than "Allow all actions" (important: self-hosted runners mount SSH keys and the
-Docker socket, so a malicious third-party action could reach internal hosts):
+### Org 層級 —— Actions 權限
+Org → Settings → Actions → General → Policies。用範圍化的 allow-list,**不要**用「Allow all actions」
+(重要:self-hosted runner 掛了 SSH key 與 Docker socket,惡意第三方 action 可藉此打到內網):
 
 > **Allow `<org>`, and select non-`<org>` actions and reusable workflows**
-> - ☑ Allow actions created by GitHub  → for `actions/checkout`, `upload-/download-artifact`
-> - ☑ Allow actions by Marketplace verified creators  → for `docker/*` (e.g. ci-images)
+> - ☑ Allow actions created by GitHub → 給 `actions/checkout`、`upload-/download-artifact`
+> - ☑ Allow actions by Marketplace verified creators → 給 `docker/*`(例如 ci-images)
 
-This governs which actions/reusable workflows a **consumer** repo may call.
+這管的是「**consumer repo 被允許呼叫哪些** action / reusable workflow」。
 
-### This repo's visibility — access for consumers
-- **Public** (current): no setup — any repo can `uses:` these workflows.
-- **Private**: Settings → Actions → General → **Access** →
-  *"Accessible from repositories in the `<org>` organization"*. Only same-org
-  repos can then use them; repos outside the org cannot (use Public for that).
+### 這個 repo 的 visibility —— 對 consumer 的開放
+- **Public**(目前):不用設 —— 任何 repo 都能 `uses:`。
+- **Private**:Settings → Actions → General → **Access** →
+  *「Accessible from repositories in the `<org>` organization」*。只有同 org 的 repo 能用;
+  org 外的 repo 不行(要跨 org 就維持 Public)。
 
-> Org policy = the consumer is *allowed to call*. Repo Access = this repo is
-> *shared out* (private only). Private needs both; public needs only the org policy.
+> Org policy = consumer「**有權限呼叫**」;Repo Access = 這個 repo「**對外分享**」(只 private 需要)。
+> private 兩個都要,public 只要 org policy。
 
-## Usage
+## 用法
 
-Pin to a tag (e.g. `@v1`), never `@main`:
+Pin 到 tag(例如 `@v1`),**不要**用 `@main`:
 
 ```yaml
 jobs:
@@ -70,7 +64,7 @@ jobs:
     needs: build
     uses: AlligatorSnatcher/cicd-templates/.github/workflows/backup.yml@v1
     with:
-      host: ${{ vars.DEV_HOST }}        # keep real hosts in the CALLER's repo vars
+      host: ${{ vars.DEV_HOST }}        # 真實 host 放在 CALLER 的 repo variables
       folder: ${{ vars.DEV_FOLDER }}
       runner_label: dev
 
@@ -84,99 +78,89 @@ jobs:
       artifact: publish-dev
 ```
 
-> Keep hosts/folders in each caller repo's **variables/secrets**, not in YAML —
-> so internal values stay in the private app repos, never in this public one.
+> host / folder 放在各 caller repo 的 **variables / secrets**,不要寫進 YAML ——
+> 內網值就只留在 private 的 app repo,不會進到這個 public repo。
 
 ## Inputs
 
 ### build.yml
-| Input | Required | Default | Notes |
+| Input | 必填 | 預設 | 說明 |
 |---|---|---|---|
-| `project` | ✅ | — | path to the `.csproj` to publish |
-| `runner_label` | ✅ | — | extra runner label (e.g. `dev` / `prod`) |
-| `config` | ➖ | `Debug` | build configuration |
-| `artifact` | ➖ | `publish` | uploaded artifact name |
+| `project` | ✅ | — | 要 publish 的 `.csproj` 路徑 |
+| `runner_label` | ✅ | — | runner label(例如 `dev` / `prod`) |
+| `config` | ➖ | `Debug` | build 設定 |
+| `artifact` | ➖ | `publish` | 上傳的 artifact 名稱 |
 
 ### test.yml
-| Input | Required | Default | Notes |
+| Input | 必填 | 預設 | 說明 |
 |---|---|---|---|
-| `project` | ✅ | — | test `.csproj` or `.sln` to run |
-| `runner_label` | ✅ | — | extra runner label (e.g. `dev` / `prod`) |
-| `config` | ➖ | `Debug` | build configuration |
+| `project` | ✅ | — | 要跑的測試 `.csproj` 或 `.sln` |
+| `runner_label` | ✅ | — | runner label(例如 `dev` / `prod`) |
+| `config` | ➖ | `Debug` | build 設定 |
 
-> The runner must have the SDK for the test project's target framework
-> (`dotnet test` builds it). E.g. a `netcoreapp3.1` test project needs the 3.1
-> SDK on the runner.
+> runner 必須有測試專案對應 framework 的 SDK(`dotnet test` 會 build 它)。
+> 例如 `netcoreapp3.1` 的測試專案,runner 就要裝 3.1 SDK。
 
 ### backup.yml
-| Input | Required | Default | Notes |
+| Input | 必填 | 預設 | 說明 |
 |---|---|---|---|
-| `host` | ✅ | — | source server (IP / hostname) |
-| `folder` | ✅ | — | app folder under `/var` |
-| `runner_label` | ✅ | — | extra runner label |
-| `keep` | ➖ | `5` | how many recent backups to keep |
+| `host` | ✅ | — | 來源伺服器(IP / hostname) |
+| `folder` | ✅ | — | `/var` 底下的 app 資料夾 |
+| `runner_label` | ✅ | — | runner label |
+| `keep` | ➖ | `5` | 保留最新幾份備份 |
 
-### deploy.yml (no gate)
-| Input | Required | Default | Notes |
+### deploy.yml(無 gate)
+| Input | 必填 | 預設 | 說明 |
 |---|---|---|---|
-| `host` | ✅ | — | target server (IP / hostname) |
-| `folder` | ✅ | — | app folder under `/var` |
-| `runner_label` | ✅ | — | extra runner label |
-| `artifact` | ➖ | `publish` | artifact name to download |
+| `host` | ✅ | — | 目標伺服器(IP / hostname) |
+| `folder` | ✅ | — | `/var` 底下的 app 資料夾 |
+| `runner_label` | ✅ | — | runner label |
+| `artifact` | ➖ | `publish` | 要下載的 artifact 名稱 |
 
-### deploy-approve.yml (actor-gated)
-| Input | Required | Default | Notes |
+### deploy-approve.yml(actor gate)
+| Input | 必填 | 預設 | 說明 |
 |---|---|---|---|
-| `host` | ✅ | — | target server (IP / hostname) |
-| `folder` | ✅ | — | app folder under `/var` |
-| `runner_label` | ✅ | — | extra runner label |
-| `allowed_actors` | ✅ | — | space-separated GitHub logins allowed to deploy. **Works on any plan** |
-| `allowed_ref` | ➖ | `""` | restrict to a ref, e.g. `refs/heads/release` |
-| `artifact` | ➖ | `publish` | artifact name to download |
+| `host` | ✅ | — | 目標伺服器(IP / hostname) |
+| `folder` | ✅ | — | `/var` 底下的 app 資料夾 |
+| `runner_label` | ✅ | — | runner label |
+| `allowed_actors` | ✅ | — | 允許部署的 GitHub 帳號(空白分隔)。**任何方案都可用** |
+| `allowed_ref` | ➖ | `""` | 限定分支,例如 `refs/heads/release` |
+| `artifact` | ➖ | `publish` | 要下載的 artifact 名稱 |
 
-> **Soft control**: a user with write access could edit the workflow to bypass
-> the actor gate. GitHub environment Required reviewers would be stronger but
-> need a paid plan on private repos.
+> **軟控制**:有 write 權限的人能改 workflow 繞過 actor gate。GitHub environment Required
+> reviewers 更強,但 private repo 需付費方案。
 >
-> **Gate timing**: the gate runs at the start of this deploy job — if called
-> after build/backup, those run first. To block unauthorized runs before build,
-> put an actor-gate job first in the caller instead.
+> **Gate 時機**:gate 在 deploy job 開始時才檢查 —— 若在 build/backup 之後才呼叫,那兩個會先跑。
+> 要讓未授權者連 build 都不准,就在 caller 放一個 authorize job 跑在最前面。
 
-## Changing a workflow
+## 改流程怎麼做
 
-Decide first *what* you're changing:
+先分清楚你改的是什麼:
 
-- **Shared logic** (the build/backup/deploy steps themselves) → edit it **here**.
-- **Project-specific** (triggers, hosts, folders, which project to build,
-  approval gates) → edit the **caller** in the app repo, not this repo.
+- **共用邏輯**(build/backup/deploy 的步驟本身)→ 改**這裡**。
+- **專案專屬**(觸發條件、host、folder、要 build 哪個專案、approval gate)→ 改 **app repo 的 caller**,不是這裡。
 
-Consumers pin `@v1`, which points at a specific commit — **editing `main` alone
-does nothing for them**. To roll a change out you must move (or cut) the tag:
+consumer pin 的是 `@v1`,它指向某個固定 commit —— **只改 `main` 對他們沒有任何作用**。要讓改動生效,必須移動(或新開)tag:
 
 ```bash
-# non-breaking change (add a step, fix a bug): move v1 forward
+# 非破壞性改動(加 step、修 bug):把 v1 往前移
 git add -A && git commit -m "fix: ..."
 git push origin main
-git tag -f v1 && git push -f origin v1     # <-- the step people forget
+git tag -f v1 && git push -f origin v1     # <-- 大家最常忘的一步
 
-# then in the consumer repo: just re-run the job — it now picks up the new v1.
-# No caller edit needed (the @v1 ref is unchanged; only what it points to moved).
+# 然後在 consumer repo:重跑 job 就會吃到新的 v1。
+# 不用改 caller(@v1 ref 沒變,只是它指向的 commit 變了)。
 ```
 
-> If you skip the `git tag -f v1` step, consumers keep running the OLD v1 even
-> after re-running their jobs.
+> 漏了 `git tag -f v1` 這步,consumer 重跑 job 還是吃舊的 v1。
 
-## Versioning
+## 版本策略
 
-`v1` is a **rolling major tag** (like `actions/checkout@v4`): non-breaking
-changes move it forward, so `@v1` consumers get them on the next run with no
-caller edit.
+`v1` 是**滾動的大版本 tag**(像 `actions/checkout@v4`):非破壞性改動把它往前移,`@v1` 的 consumer 下次跑就拿到,不用改 caller。
 
-| Change | Action here | Consumer |
+| 改動 | 這裡要做 | consumer |
 |---|---|---|
-| Non-breaking (add step, bug fix) | `git tag -f v1 && git push -f origin v1` | re-run job, picks it up |
-| Breaking (rename/required input) | cut a new tag `v2` | bump `@v1` → `@v2` per repo, on their own schedule |
+| 非破壞性(加 step、修 bug) | `git tag -f v1 && git push -f origin v1` | 重跑 job 就吃到 |
+| 破壞性(改 input 名 / 必填) | 開新 tag `v2` | 各自 `@v1` → `@v2`,自行排程遷移 |
 
-Breaking changes get a new major tag so the old one keeps working — consumers
-migrate when they choose. Pin a full SHA instead of `@v1` if you need a frozen,
-never-moving reference.
+破壞性改動開新大版本,舊 tag 繼續可用,consumer 自己選時間遷移。需要永不變動的固定引用,就 pin 完整 SHA 而非 `@v1`。
